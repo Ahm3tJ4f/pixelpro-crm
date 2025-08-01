@@ -3,3 +3,10 @@ sqlalchemy
 alembic
 psycopg2-binary
 pylint
+pyhumps
+passlib
+python-jose
+redis
+loguru
+bcrypt
+pytest
