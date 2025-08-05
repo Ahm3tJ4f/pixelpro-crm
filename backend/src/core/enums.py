@@ -10,3 +10,11 @@ class RedisKeys(str, Enum):
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
     OPERATOR = "OPERATOR"
+
+
+class MeetingStatus(str, Enum):
+    CREATED = "CREATED"
+    PENDING = "PENDING"
+    JOINED = "JOINED"
+    FINISHED = "FINISHED"
+    CANCELLED = "CANCELLED"

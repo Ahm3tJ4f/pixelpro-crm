@@ -111,18 +111,16 @@ class AuthService:
         return user
 
 
-# Factory function for dependency injection
-def create_auth_service(db: DbSession, redis_client: RedisClient) -> AuthService:
+def get_auth_service(db: DbSession, redis_client: RedisClient) -> AuthService:
     return AuthService(db, redis_client)
 
 
-AuthServiceDep = Annotated[AuthService, Depends(create_auth_service)]
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
 def get_current_user_dependency(
-    db: DbSession, redis_client: RedisClient, access_token: Oauth2Token
+    auth_service: AuthServiceDep, access_token: Oauth2Token
 ) -> User:
-    auth_service = AuthService(db, redis_client)
     return auth_service.get_current_user(access_token)
 
 

@@ -55,12 +55,18 @@ def test_refresh_token_security_flow(testing_client, login_response):
 
     login_payload = {"username": "testuser", "password": "testpassword"}
 
-    login_response_2 = testing_client.post("/auth/login", json=login_payload)
+    new_login_response = testing_client.post("/auth/login", json=login_payload)
 
-    assert login_response_2.status_code == 200
+    assert new_login_response.status_code == 200
 
     payload = {"refreshToken": refresh_response.json()["refreshToken"]}
 
     invalid_token_response = testing_client.post("/auth/refresh", json=payload)
 
     assert invalid_token_response.status_code == 401
+
+    headers = {"Authorization": f"Bearer {new_login_response.json()['accessToken']}"}
+
+    logout_response = testing_client.post("/auth/logout", headers=headers)
+
+    assert logout_response.status_code == 204
