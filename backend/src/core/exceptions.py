@@ -7,7 +7,6 @@ class AuthenticationError(HTTPException):
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -20,4 +19,11 @@ class UserAlreadyExistsError(HTTPException):
     def __init__(self):
         super().__init__(
             status_code=status.HTTP_409_CONFLICT, detail="User already exists"
+        )
+
+
+class CitizenNotFoundError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Citizen not found"
         )

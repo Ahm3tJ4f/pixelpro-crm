@@ -40,6 +40,7 @@ services:
       ALGORITHM: ${ALGORITHM}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS}
+      CITIZEN_EXPIRE_DAYS: ${CITIZEN_EXPIRE_DAYS}
     command: >
       sh -c "
         echo 'Waiting for postgres...' &&

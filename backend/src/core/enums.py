@@ -4,7 +4,7 @@ from enum import Enum
 class RedisKeys(str, Enum):
     REFRESH_TOKEN = "refresh_token"
     USER_SESSION = "user_session"
-    BLACKLIST = "blacklist"
+    CITIZEN = "citizen"
 
 
 class UserRole(str, Enum):
@@ -18,3 +18,7 @@ class MeetingStatus(str, Enum):
     JOINED = "JOINED"
     FINISHED = "FINISHED"
     CANCELLED = "CANCELLED"
+
+class DocumentSerial(str, Enum):
+    AA="AA"
+    AZE="AZE"

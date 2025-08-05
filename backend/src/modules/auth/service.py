@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
-from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
-from src.core.enums import RedisKeys
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer
+from src.core.enums import RedisKeys, UserRole
 from src.core.redis import RedisClient, get_redis_value
 from src.modules.auth.model import (
     AuthResponse,
@@ -28,8 +28,7 @@ from src.core.utils.auth import (
     get_password_hash,
 )
 
-oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/login")
-Oauth2Token = Annotated[str, Depends(oauth2_bearer)]
+BearerToken = Annotated[str, Depends(HTTPBearer())]
 
 
 class AuthService:
@@ -88,8 +87,8 @@ class AuthService:
         auth_response = set_session(user, self.redis_client)
         return auth_response
 
-    def logout_user(self, access_token: Oauth2Token) -> bool:
-        user_session = decode_jwt(access_token)
+    def logout_user(self, bearer_token: BearerToken) -> bool:
+        user_session = decode_jwt(bearer_token.credentials)
 
         if not user_session:
             raise AuthenticationError()
@@ -101,8 +100,8 @@ class AuthService:
 
         return delete_session(user.id, self.redis_client)
 
-    def get_current_user(self, access_token: Oauth2Token) -> User:
-        token_payload = decode_jwt(access_token)
+    def get_current_user(self, bearer_token: BearerToken) -> User:
+        token_payload = decode_jwt(bearer_token.credentials)
         user_id = UUID(token_payload["sub"])
 
         user = self.db.query(User).filter(User.id == user_id).first()
@@ -110,18 +109,42 @@ class AuthService:
             raise UserNotFoundError()
         return user
 
+    def get_operator_user(self, bearer_token: BearerToken) -> User:
+        user = self.get_current_user(bearer_token)
+        if user.role != UserRole.OPERATOR:
+            raise HTTPException(
+                status_code=403, detail="Only operators can access this resource"
+            )
+        return user
+
+    def get_admin_user(self, bearer_token: BearerToken) -> User:
+        user = self.get_current_user(bearer_token)
+        if user.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=403, detail="Only admins can access this resource"
+            )
+        return user
+
 
 def get_auth_service(db: DbSession, redis_client: RedisClient) -> AuthService:
     return AuthService(db, redis_client)
 
-
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
-def get_current_user_dependency(
-    auth_service: AuthServiceDep, access_token: Oauth2Token
+def get_operator_user_dependency(
+    auth_service: AuthServiceDep, bearer_token: BearerToken
 ) -> User:
-    return auth_service.get_current_user(access_token)
+    return auth_service.get_operator_user(bearer_token)
 
 
-CurrentUser = Annotated[User, Depends(get_current_user_dependency)]
+GetOperatorUser = Annotated[User, Depends(get_operator_user_dependency)]
+
+
+def get_admin_user_dependency(
+    auth_service: AuthServiceDep, bearer_token: BearerToken
+) -> User:
+    return auth_service.get_admin_user(bearer_token)
+
+
+GetAdminUser = Annotated[User, Depends(get_admin_user_dependency)]

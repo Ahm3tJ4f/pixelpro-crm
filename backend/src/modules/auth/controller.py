@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response
 from starlette.status import HTTP_204_NO_CONTENT
 
-from src.modules.auth.service import AuthServiceDep, Oauth2Token
+from src.modules.auth.service import AuthServiceDep, BearerToken
 from src.modules.auth.model import LoginRequest, AuthResponse, RefreshRequest, RegisterRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -23,6 +23,6 @@ def refresh(request: RefreshRequest, auth_service: AuthServiceDep):
 
 
 @router.post("/logout", status_code=HTTP_204_NO_CONTENT)
-def logout(auth_service: AuthServiceDep, access_token: Oauth2Token):
-    auth_service.logout_user(access_token)
+def logout(auth_service: AuthServiceDep, bearer_token: BearerToken):
+    auth_service.logout_user(bearer_token)
     return Response(status_code=HTTP_204_NO_CONTENT)
