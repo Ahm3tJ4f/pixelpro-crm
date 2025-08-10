@@ -97,3 +97,7 @@ def delete_session(user_id: UUID, redis_client: RedisClient) -> bool:
     delete_redis_value(redis_client, RedisKeys.USER_SESSION, user_id_str)
 
     return True
+
+
+def generate_otp(length: int = 6) -> str:
+    return "".join(str(secrets.randbelow(10)) for _ in range(length))

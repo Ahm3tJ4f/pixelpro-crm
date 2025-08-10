@@ -5,6 +5,7 @@ class RedisKeys(str, Enum):
     REFRESH_TOKEN = "refresh_token"
     USER_SESSION = "user_session"
     CITIZEN = "citizen"
+    MEETING = "meeting"
 
 
 class UserRole(str, Enum):
@@ -15,10 +16,6 @@ class UserRole(str, Enum):
 class MeetingStatus(str, Enum):
     CREATED = "CREATED"
     PENDING = "PENDING"
-    JOINED = "JOINED"
+    IN_PROGRESS = "IN_PROGRESS"
     FINISHED = "FINISHED"
     CANCELLED = "CANCELLED"
-
-class DocumentSerial(str, Enum):
-    AA="AA"
-    AZE="AZE"

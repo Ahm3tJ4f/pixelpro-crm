@@ -4,7 +4,9 @@ from fastapi import Path
 from pydantic import Field
 from src.core.base_model import CamelModel
 
-CitizenRequestPath = Annotated[str, Path(pattern=r"^[A-HJ-NP-Za-hj-np-z0-9]{7}$", alias="pinCode")]
+PinCodePath = Annotated[
+    str, Path(pattern=r"^[A-HJ-NP-Za-hj-np-z0-9]{7}$", alias="pinCode")
+]
 
 
 class CitizenResponse(CamelModel):

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends
 from src.modules.citizens.asan_service import AsanServiceDep
 from src.core.enums import RedisKeys
-from src.modules.citizens.model import CitizenResponse
+from src.modules.citizens.model import CitizenResponse, PinCodePath
 from src.core.redis import RedisClient, get_redis_value, set_redis_value
 from src.core.constants import CITIZEN_EXPIRE_SECONDS
 
@@ -13,7 +13,7 @@ class CitizenService:
         self.redis_client = redis_client
         self.asan_service = asan_service
 
-    async def get_citizen(self, pin_code: str) -> CitizenResponse:
+    async def get_citizen(self, pin_code: PinCodePath) -> CitizenResponse:
         pin_code = pin_code.lower()
 
         cached_citizen_json = get_redis_value(
