@@ -12,6 +12,11 @@ from src.modules.meetings.model import MeetingIdPath
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
 
 
+@router.get("/")
+def get_meetings(meeting_service: MeetingServiceDep, operator: GetOperatorUser):
+    return meeting_service.get_meetings(operator)
+
+
 @router.post("/", status_code=HTTP_201_CREATED)
 def create_meeting(
     request: MeetingRequest,
@@ -27,7 +32,7 @@ def join_meeting_operator(
     meeting_service: MeetingServiceDep,
     operator: GetOperatorUser,
 ):
-    return meeting_service.join_meeting_operator(meeting_id)
+    return meeting_service.join_meeting_operator(meeting_id, operator)
 
 
 @router.post("/{meetingId}/join/citizen")

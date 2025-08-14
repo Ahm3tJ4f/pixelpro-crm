@@ -129,6 +129,7 @@ class AuthService:
 def get_auth_service(db: DbSession, redis_client: RedisClient) -> AuthService:
     return AuthService(db, redis_client)
 
+
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 

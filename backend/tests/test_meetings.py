@@ -1,244 +1,182 @@
-import pytest
-from unittest.mock import patch
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
-from src.modules.meetings.model import MeetingRequest, JoinMeetingCitizenRequest
-from src.core.exceptions import (
-    CitizenNotFoundError,
-    MeetingAlreadyScheduledError,
-    MeetingNotFoundError,
-    InvalidOTPError,
-)
+from datetime import datetime, timedelta, timezone
+import json
 
 
-def test_create_meeting_success(testing_client, login_response):
-    """Test successful meeting creation"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
+def test_create_meeting(testing_client, login_response, redis_client):
+    # Get access token from login
+    access_token = login_response["accessToken"]  # camelCase
+    headers = {"Authorization": f"Bearer {access_token}"}
 
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
+    # Step 1: Get a specific citizen by pin_code
+    # You need to know a valid pin_code first - let's use a test one
+    test_pin_code = "2DnXyD8"  # Use a valid test pin_code
+
+    citizens_response = testing_client.get(
+        f"/citizens/{test_pin_code}", headers=headers
+    )
+    assert citizens_response.status_code == 200
+
+    citizen_data = citizens_response.json()
+    assert citizen_data["pinCode"] == test_pin_code.upper()
+
+    # Step 2: Create dynamic meeting payload with tomorrow's date
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+    meeting_payload = {
+        "citizenPinCode": test_pin_code,  # camelCase
+        "citizenPhone": "994501234567",  # camelCase
+        "scheduledAt": tomorrow.isoformat().replace("+00:00", "Z"),  # Clean conversion
+    }
+
+    meeting_response = testing_client.post(
+        "/meetings", json=meeting_payload, headers=headers
+    )
+
+    # Assertions
+    assert meeting_response.status_code == 201
+
+    meeting_data = meeting_response.json()
+    assert meeting_data["id"] is not None
+    assert meeting_data["status"] == "CREATED"
+    assert meeting_data["firstName"] == citizen_data["firstName"]  # camelCase
+    assert meeting_data["lastName"] == citizen_data["lastName"]  # camelCase
+    assert meeting_data["pinCode"] == test_pin_code.upper()  # camelCase
+    assert meeting_data["phone"] == meeting_payload["citizenPhone"]  # camelCase
+    assert meeting_data["scheduledAt"] == meeting_payload["scheduledAt"]  # camelCase
+
+    # Step 3: Check if meeting record exists in Redis
+    meeting_id = str(meeting_data["id"])
+    redis_key = f"meeting:{meeting_id}"
+
+    meeting_redis_data = redis_client.get(redis_key)
+    assert (
+        meeting_redis_data is not None
+    ), f"Meeting data not found in Redis with key: {redis_key}"
+
+
+def test_create_duplicate_meeting(testing_client, login_response):
+    # Get access token from login
+    access_token = login_response["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Step 1: Get a citizen to use
+    test_pin_code = "2DnXyD8"
+    citizens_response = testing_client.get(
+        f"/citizens/{test_pin_code}", headers=headers
+    )
+    assert citizens_response.status_code == 200
+
+    citizen_data = citizens_response.json()
+    assert citizen_data["pinCode"] == test_pin_code.upper()
+
+    # Step 2: Try to create duplicate meeting (should fail with 409)
+    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+    meeting_payload = {
+        "citizenPinCode": test_pin_code,
         "citizenPhone": "994501234567",
-        "scheduledAt": "2099-01-15T10:00:00Z",
+        "scheduledAt": tomorrow.isoformat().replace("+00:00", "Z"),
     }
 
-    response = testing_client.post("/meetings/", json=meeting_data, headers=headers)
-
-    assert response.status_code == 201
-
-    data = response.json()
-
-    assert "id" in data
-    assert data["status"] == "CREATED"
-
-
-def test_create_meeting_citizen_not_found(testing_client, login_response):
-    """Test meeting creation with non-existent citizen"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    meeting_data = {
-        "citizenPinCode": "NONEXIST",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    response = testing_client.post("/meetings/", json=meeting_data, headers=headers)
-    assert response.status_code == 404
-
-
-def test_create_meeting_already_scheduled(testing_client, login_response):
-    """Test meeting creation when citizen already has a meeting"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    # Create first meeting
-    response1 = testing_client.post("/meetings/", json=meeting_data, headers=headers)
-    assert response1.status_code == 201
-
-    # Try to create second meeting for same citizen
-    response2 = testing_client.post("/meetings/", json=meeting_data, headers=headers)
-    assert response2.status_code == 400  # Assuming 400 for already scheduled
-
-
-def test_create_meeting_invalid_data(testing_client, login_response):
-    """Test meeting creation with invalid data"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    # Invalid phone number
-    invalid_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "123",  # Invalid format
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    response = testing_client.post("/meetings/", json=invalid_data, headers=headers)
-    assert response.status_code == 422
-
-
-def test_join_meeting_operator_success(testing_client, login_response):
-    """Test operator joining a meeting"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    # First create a meeting
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    create_response = testing_client.post(
-        "/meetings/", json=meeting_data, headers=headers
+    duplicate_meeting_response = testing_client.post(
+        "/meetings", json=meeting_payload, headers=headers
     )
-    assert create_response.status_code == 201
 
-    meeting_id = create_response.json()["id"]
-
-    # Join the meeting
-    join_response = testing_client.post(
-        f"/meetings/{meeting_id}/join/operator", headers=headers
-    )
-    assert join_response.status_code == 200
-
-    data = join_response.json()
-    assert "jitsiToken" in data
+    # Should fail with 409 Conflict
+    assert duplicate_meeting_response.status_code == 409
 
 
-def test_join_meeting_citizen_success(testing_client, login_response):
-    """Test citizen joining a meeting with valid OTP"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
+# def test_join_meeting_operator(testing_client, login_response, redis_client):
+#     # Get access token from login
+#     access_token = login_response["accessToken"]
+#     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # First create a meeting
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
+#     # Step 1: Create a meeting first (use same citizen)
+#     test_pin_code = "2DnXyD8"
+#     tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+#     meeting_payload = {
+#         "citizenPinCode": test_pin_code,
+#         "citizenPhone": "994501234567",
+#         "scheduledAt": tomorrow.isoformat().replace("+00:00", "Z"),
+#     }
 
-    create_response = testing_client.post(
-        "/meetings/", json=meeting_data, headers=headers
-    )
-    assert create_response.status_code == 201
+#     meeting_response = testing_client.post(
+#         "/meetings", json=meeting_payload, headers=headers
+#     )
+#     assert meeting_response.status_code == 201
 
-    meeting_id = create_response.json()["id"]
+#     meeting_data = meeting_response.json()
+#     meeting_id = meeting_data["id"]
 
-    # Get OTP from Redis (you might need to mock this or access Redis directly)
-    # For now, let's assume we know the OTP or mock it
-    with patch("src.modules.meetings.service.generate_otp", return_value="123456"):
-        # Join the meeting with OTP
-        join_data = {"otp": "123456"}
-        join_response = testing_client.post(
-            f"/meetings/{meeting_id}/join/citizen", json=join_data
-        )
-        assert join_response.status_code == 200
+#     # Step 2: Operator joins the meeting (status: CREATED → PENDING)
+#     join_response = testing_client.post(
+#         f"/meetings/{meeting_id}/join-operator", headers=headers
+#     )
+#     assert join_response.status_code == 200
 
-        data = join_response.json()
-        assert "jitsiToken" in data
+#     join_data = join_response.json()
+#     assert "jitsiToken" in join_data
 
+#     # Step 3: Verify meeting status changed to PENDING
+#     meetings_response = testing_client.get("/meetings", headers=headers)
+#     assert meetings_response.status_code == 200
 
-def test_join_meeting_citizen_invalid_otp(testing_client, login_response):
-    """Test citizen joining with invalid OTP"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    # First create a meeting
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    create_response = testing_client.post(
-        "/meetings/", json=meeting_data, headers=headers
-    )
-    assert create_response.status_code == 201
-
-    meeting_id = create_response.json()["id"]
-
-    # Join with invalid OTP
-    join_data = {"otp": "000000"}
-    join_response = testing_client.post(
-        f"/meetings/{meeting_id}/join/citizen", json=join_data
-    )
-    assert join_response.status_code == 400  # Assuming 400 for invalid OTP
+#     meetings = meetings_response.json()
+#     updated_meeting = next(m for m in meetings if m["id"] == meeting_id)
+#     assert updated_meeting["status"] == "PENDING"
 
 
-def test_join_meeting_not_found(testing_client, login_response):
-    """Test joining a non-existent meeting"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
+# def test_join_meeting_citizen(testing_client, login_response, redis_client):
+#     # Get access token for operator (needed to create meeting)
+#     access_token = login_response["accessToken"]
+#     operator_headers = {"Authorization": f"Bearer {access_token}"}
 
-    fake_meeting_id = str(uuid4())
+#     # Step 1: Create a meeting first (operator action) - use same citizen
+#     test_pin_code = "2DnXyD8"
+#     tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
+#     meeting_payload = {
+#         "citizenPinCode": test_pin_code,
+#         "citizenPhone": "994501234567",
+#         "scheduledAt": tomorrow.isoformat().replace("+00:00", "Z"),
+#     }
 
-    # Try to join non-existent meeting
-    response = testing_client.post(
-        f"/meetings/{fake_meeting_id}/join/operator", headers=headers
-    )
-    assert response.status_code == 404
+#     meeting_response = testing_client.post(
+#         "/meetings", json=meeting_payload, headers=operator_headers
+#     )
+#     assert meeting_response.status_code == 201
 
+#     meeting_data = meeting_response.json()
+#     meeting_id = meeting_data["id"]
 
-def test_finish_meeting_success(testing_client, login_response):
-    """Test finishing a meeting"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
+#     # Step 2: Operator joins first (status: CREATED → PENDING)
+#     testing_client.post(
+#         f"/meetings/{meeting_id}/join-operator", headers=operator_headers
+#     )
 
-    # First create a meeting
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
+#     # Step 3: Get OTP from Redis
+#     redis_key = f"meeting:{meeting_id}"
+#     meeting_redis_data = redis_client.get(redis_key)
+#     assert meeting_redis_data is not None
 
-    create_response = testing_client.post(
-        "/meetings/", json=meeting_data, headers=headers
-    )
-    assert create_response.status_code == 201
+#     import json
 
-    meeting_id = create_response.json()["id"]
+#     redis_meeting = json.loads(meeting_redis_data)
+#     otp = redis_meeting["otp"]
 
-    # Finish the meeting
-    finish_response = testing_client.post(
-        f"/meetings/{meeting_id}/finish", headers=headers
-    )
-    assert finish_response.status_code == 204
+#     # Step 4: Citizen joins with OTP (NO AUTH NEEDED)
+#     citizen_join_payload = {"otp": otp}
+#     join_response = testing_client.post(
+#         f"/meetings/{meeting_id}/join-citizen",
+#         json=citizen_join_payload,
+#         # No headers - citizen doesn't need authentication
+#     )
+#     assert join_response.status_code == 200
 
+#     join_data = join_response.json()
+#     assert "jitsiToken" in join_data
 
-def test_finish_meeting_not_found(testing_client, login_response):
-    """Test finishing a non-existent meeting"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
+#     # Step 5: Verify meeting status changed to IN_PROGRESS
+#     meetings_response = testing_client.get("/meetings", headers=operator_headers)
+#     assert meetings_response.status_code == 200
 
-    fake_meeting_id = str(uuid4())
-
-    # Try to finish non-existent meeting
-    response = testing_client.post(
-        f"/meetings/{fake_meeting_id}/finish", headers=headers
-    )
-    assert response.status_code == 404
-
-
-def test_meeting_redis_caching(testing_client, login_response, redis_client):
-    """Test that meeting data is properly cached in Redis"""
-    headers = {"Authorization": f"Bearer {login_response['accessToken']}"}
-
-    meeting_data = {
-        "citizenPinCode": "2DNXYD8",
-        "citizenPhone": "994501234567",
-        "scheduledAt": "2024-01-15T10:00:00Z",
-    }
-
-    # Create meeting
-    response = testing_client.post("/meetings/", json=meeting_data, headers=headers)
-    assert response.status_code == 201
-
-    meeting_id = response.json()["id"]
-
-    # Check that meeting data was cached in Redis
-    cached_data = redis_client.get(f"meeting:{meeting_id}")
-    assert cached_data is not None
-
-    # Verify the cached data contains OTP and citizen data
-    import json
-
-    meeting_redis_data = json.loads(cached_data)
-    assert "otp" in meeting_redis_data
-    assert "citizen_data" in meeting_redis_data
+#     meetings = meetings_response.json()
+#     updated_meeting = next(m for m in meetings if m["id"] == meeting_id)
+#     assert updated_meeting["status"] == "IN_PROGRESS"

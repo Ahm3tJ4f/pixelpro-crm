@@ -10,7 +10,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-     - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
 
   redis:
     image: redis:7-alpine
@@ -41,6 +41,12 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS}
       CITIZEN_EXPIRE_DAYS: ${CITIZEN_EXPIRE_DAYS}
+      JITSI_JWT_SECRET: ${JITSI_JWT_SECRET}
+      JITSI_ISSUER: ${JITSI_ISSUER}
+      JITSI_AUDIENCE: ${JITSI_AUDIENCE}
+      JITSI_SUBJECT: ${JITSI_SUBJECT}
+      JITSI_GROUP: ${JITSI_GROUP}
+      JITSI_TOKEN_EXPIRY_HOURS: ${JITSI_TOKEN_EXPIRY_HOURS}
     command: >
       sh -c "
         echo 'Waiting for postgres...' &&

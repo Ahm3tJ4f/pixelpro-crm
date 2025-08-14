@@ -2,7 +2,12 @@ from fastapi import APIRouter, Response
 from starlette.status import HTTP_204_NO_CONTENT
 
 from src.modules.auth.service import AuthServiceDep, BearerToken
-from src.modules.auth.model import LoginRequest, AuthResponse, RefreshRequest, RegisterRequest
+from src.modules.auth.model import (
+    LoginRequest,
+    AuthResponse,
+    RefreshRequest,
+    RegisterRequest,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
